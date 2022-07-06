@@ -1,0 +1,85 @@
+name: Linting
+
+on:
+  workflow_call:
+    inputs:
+      python-version:
+        required: true
+        type: string
+      node-version:
+        required: true
+        type: string
+
+jobs:
+  flake8:
+    name: flake8
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ inputs.python-version }}-${{ hashFiles('**/requirements-dev.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+    - name: Set up Python  ${{ inputs.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ inputs.python-version }}
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install flake8
+    - name: Run flake8
+      run: flake8 .
+
+  pip-check:
+    name: pip check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ inputs.python-version }}-${{ hashFiles('**/requirements.txt') }}-${{ hashFiles('**/requirements-dev.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+      - name: Set up Python  ${{ inputs.python-version }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ inputs.python-version }}
+      - name: Install dependencies
+        run: |
+          python -m venv ./venv
+          ./venv/bin/pip install --upgrade pip
+          ./venv/bin/pip install wheel
+          ./venv/bin/pip install -r requirements.txt
+          ./venv/bin/pip install -r requirements-dev.txt
+      - name: Run pip-check
+        run: ./venv/bin/pip check
+
+  eslint:
+    name: eslint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/cache@v3
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-npm-${{ inputs.node-version }}-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-npm-
+      - name: Setup Node
+        uses: actions/setup-node@v3
+        with:
+          node-version: ${{ inputs.node-version }}
+      - name: Install dependencies
+        run: npm ci --cache .npm --prefer-offline
+      - name: ESLint
+        run: ./node_modules/.bin/eslint --ext .js,.vue --output-file eslint_report.json --format json javascript
+      - name: Annotate Code Linting Results
+        uses: ataylorme/eslint-annotate-action@v2
+        with:
+          repo-token: "${{ secrets.GITHUB_TOKEN }}"
+          report-json: "eslint_report.json"
+          fail-on-warning: true
